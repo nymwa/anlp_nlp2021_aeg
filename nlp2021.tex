@@ -1,0 +1,847 @@
+%#!platex
+\documentclass[
+  platex, dvipdfmx % ワークフローは必ず明示的に指定する
+]{nlp2021}
+%english option
+%\documentclass[platex, dvipdfmx, english]{nlp2021}
+%#!uplatex
+%\documentclass[uplatex,dvipdfmx]{nlp2021}
+%#!lualatex
+%\documentclass[lualatex]{nlp2021}
+
+
+% パッケージ
+\usepackage{xcolor}  %
+\usepackage{graphicx}  % グラフィックス関連
+\usepackage{pxrubrica}        % ルビ
+\usepackage{url}
+
+%% option 不要な場合はコメントアウト
+\usepackage{hyperref}
+\usepackage{pxjahyper}
+\hypersetup{
+	colorlinks=true, 
+    citecolor=blue, 
+    linkcolor=blue,
+	pdfborder={0 0 0},
+}
+% 参考文献のフォントサイズを指定
+%\renewcommand{\bibfont}{\normalsize} % 標準サイズ
+\renewcommand{\bibfont}{\footnotesize} % より小さく
+%\renewcommand{\bibfont}{\fontsize{8.25pt}{1.75pt}\selectfont}
+
+% 著者用マクロをここに入れる
+\newcommand{\pkg}[1]{\textsf{#1}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\comment}[1]{\textcolor{red}{#1}}
+%%%%%%%
+
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage{pgfplots, pgfplotstable}
+\usepackage{stfloats}
+
+\title{ニューラル文法誤り訂正のための\\多様な規則を用いる人工誤り生成}
+\author{%
+	古山翔太${}^\textrm{1,2}$
+	\hspace{2em}
+	高村大也${}^\textrm{1,2}$
+	\hspace{2em}
+ 	岡崎直観${}^\textrm{1,2}$
+	\\
+	${}^\textrm{1}$東京工業大学
+	\hspace{2em}
+	${}^\textrm{2}$産業技術総合研究所
+	\\
+	\texttt{shota.koyama[at]nlp.c.titech.ac.jp},
+	\texttt{takamura.hiroya[at]aist.go.jp},\\
+	\texttt{okazaki[at]c.titech.ac.jp}
+}
+
+\begin{document}
+
+\maketitle
+
+\section{はじめに}
+文法誤り訂正は，与えられた文書から綴りの間違いや，単語の誤用などの文法的な誤りを見つけ，正しい表現へと修正する技術である．
+言語学習者支援や文書校正への応用が期待されており，自然言語処理の重要な課題のひとつである．
+
+文法誤り訂正では，誤り注釈付きの学習者コーパスを教師データとして，ニューラルネットワークのモデルを学習する手法が主流である~\cite{junczys-dowmunt-etal-2018-approaching}．
+さらに，人工誤り生成による人工誤りデータを用いてニューラルネットワークのモデルを事前学習したのちに，
+学習者コーパスを用いて再学習（ファインチューニング）を行うアプローチの有効性が報告されている~\cite{lichtarge-etal-2019-corpora}．
+そのため，事前学習に用いる学習データを生成するための人工誤り生成手法の改善は，ニューラル文法誤り訂正における重要な研究課題である．
+
+人工誤り生成は，文法誤り訂正固有のデータ拡張手法であり，
+単語を置き換える規則や文法誤りを生成する手法を用い，
+文法的な文に誤りを導入することで，人工誤りデータを構築する．
+ニューラル文法誤り訂正のための人工誤り生成には，機械翻訳による誤り生成と，誤り生成規則による誤り生成がある．
+機械翻訳による誤り生成は，系列変換モデルを用いて誤りデータを作成する手法であり，
+逆翻訳を用いる手法~\cite{rei-etal-2017-artificial,ge-etal-2018-fluency,kiyono-etal-2019-empirical}や，
+折り返し翻訳を用いる手法~\cite{lichtarge-etal-2019-corpora,lichtarge-etal-2020-data}，
+初級・上級翻訳器を用いる手法~\cite{zhou-etal-2020-improving-grammatical}が提案されている．
+一方，規則による誤り生成では，各規則は特定の種類の誤りのみしか生成できず，文法カテゴリごとに異なる規則を準備する必要がある．
+このため，英語文法誤り訂正においては，誤りの種類ごとに様々な誤り生成規則が提案されている．
+
+英語を対象とした人工誤り生成において，誤り生成規則は，
+機能語誤り，
+語形変化誤り，
+表記体系の誤り，
+単語選択の誤り，
+語順誤りの生成
+に関するものに大別できる．
+
+機能語誤りは，例えば ``I went for Tokyo.'' の for（訂正は to）のような，前置詞や代名詞などの機能語の用法に関する誤りである．
+機能語誤りの生成手法として，
+冠詞を置き換える手法~\cite{izumi-etal-2003-automatic}や，
+学習者の誤り傾向を反映し，冠詞や前置詞の誤りを生成する手法 ~\cite{rozovskaya-roth-2010-training,rozovskaya-roth-2010-generating} などが提案されている．
+
+語形変化誤りは，例えば ``I goed to Tokyo.'' の goed（訂正は went）のような，内容語の語形変化における誤りである．
+語形変化誤りの生成手法として，
+不可算名詞の数に関する誤りを生成する手法 ~\cite{brockett-etal-2006-correcting} や，
+品詞解析の結果に基づき名詞数や動詞変化の誤りを生成する手法 ~\cite{choe-etal-2019-neural} などが提案されている．
+
+表記体系の誤りは，例えば ``I want to Tokyo.'' の want（訂正は went）のような綴りの誤りや，句読法，複合語，分かち書き，縮約，大小文字の規則に関する誤りである．
+表記体系の誤り生成手法として，
+文中のコンマを削除する手法 ~\cite{flachs-etal-2019-noisy} や，
+綴り誤り訂正器を逆適用する手法 ~\cite{grundkiewicz-etal-2019-neural} が提案されている．
+
+単語選択の誤りは，例えば ``I lost my flight.'' の lost（訂正は missed）のような類義語の誤用や，接辞が異なる語を用いる誤りである．
+単語選択の誤り生成手法として，
+品詞解析の結果に基づき接辞に関する誤りを生成する手法が提案されている ~\cite{xu-etal-2019-erroneous}．
+
+語順誤りは，例えば ``I my flight missed.'' の my flight の位置（missed の後ろが正しい）のように，文中の語や句の位置に関する誤りである．
+語順誤りの生成手法として，
+隣り合う単語を入れ替える手法が提案されている ~\cite{inproceedings000,grundkiewicz-etal-2019-neural}．
+
+以上のように，人工誤り生成のための規則による誤り生成手法は数多く存在している．
+しかし，いずれの手法も，特定の種類か，あるいは少数の誤り生成規則を適用して人工誤り生成を行っている．
+このため，これらの手法で生成されるデータは，多様な種類の誤りを含む実際の文書と比較して，非常に限られた種類の誤りのみを含む．
+このような手法で生成される誤りデータを用いて訂正モデルを学習する場合，
+人工誤り生成が対応していない種類の誤りに対しては，
+誤り訂正の性能向上が期待できない．
+
+本研究では，英文中の様々な文法誤りに対して誤り生成規則を設計し，
+それらを組み合わせて多様な誤り文を生成できる人工誤り生成の枠組みを提案する．
+提案手法では，複数の誤り生成規則を文ごとに異なる確率で適用することで，多様な誤り文を生成する．
+生成された誤りデータで文法誤り訂正モデルを事前学習し，さらに学習者コーパスで再学習する実験を行う．
+提案手法の誤り生成規則や適用確率はすべて人手で調整しているが，この方法で生成した誤りデータを用いて事前学習を行ったモデルは，事前学習を行わないベースラインよりも高い訂正性能を示した．
+さらに，特定の誤り種類に関する誤り生成規則を人工誤り生成から取り除くことによる影響を評価し，
+多様な誤り生成規則を用いる人工誤り生成の有効性を検証する．
+
+\section{手法}
+提案手法では，単言語コーパスの各文に対して複数の誤り生成規則を順番に，かつ独立に適用する．
+単言語コーパスの各文には，
+SpaCy v2.3 \footnote{\url{https://spacy.io/}}を用いて
+トークナイズを施し，
+品詞タグ，係り受け解析タグ，
+見出し語，固有表現の IOB タグと種類を，単語ごとに付与しておく．
+誤り生成規則は単語ごとに適用され，
+ある誤り生成規則が，ある語に対して誤り生成可能であるかは，その語やその周辺の語に付与された情報から判定される．
+各誤り生成規則は，固有のベータ分布を保持しており，文ごとにしきい値をサンプルする．
+誤り生成規則は，誤りを生成可能な単語ごとに，一様分布から値をサンプルし，その値がしきい値を超えた場合に誤りを生成する．
+この仕組みのため，文ごとに異なる割合で誤りが生成され，多様な誤り文を得ることができる．
+入力文に対してすべての誤り生成規則を適用した文を誤り文，入力文を修正文とし，誤りデータを生成する．
+
+誤り生成規則は，計188種類を作成した．
+このうち，154 種類が機能語誤りに，
+5 種類が語形変化誤りに，
+19 種類が表記体系誤りに，
+6 種類が語順誤りに，
+2 種類が単語選択誤りに関する誤り生成規則である．
+その他，記号や頻度の高い機能語の削除を行う誤り生成規則と，
+マスクトークン予測のための規則がある．
+誤り生成規則の多くは，条件に合う単語を削除したり，置き換えたりするものである．
+例えば，前置詞 than に関する誤り生成規則は，
+前置詞の than に対して
+確率 0.2 で削除操作を行い，
+またそれぞれ確率 0.4, 0.2, 0.1, 0.1 で than を to, from, over, beyond に置き換える．
+単語を挿入する誤り生成規則もあり，
+例えば，冠詞を挿入する誤り生成規則では，
+文頭，あるいはある単語間の位置において，
+左の単語が存在しないか，あるいは
+左の単語の Penn Treebank 品詞タグが，VB, VBD, VBG, VBN, VBP, VBZ, IN のいずれかであり，かつ
+右の単語の Penn Treebank 品詞タグが，NN, NNS, JJ, JJN, JJS のいずれかである場合に，
+a, an, the, this, that, these, those を，それぞれ 0.3, 0.3, 0.3, 0.025, 0.025, 0.025, 0.025 の確率でサンプルし，挿入する．
+人工誤り生成に用いるソースコードは，GitHub上で公開した\footnote{\url{https://github.com/nymwa/arteraro}}．
+その他の誤り生成規則の詳細はそちらを参照してほしい．
+
+\section{実験}
+\begin{table}[t]
+	\begin{minipage}[c]{.19\textwidth}
+			\small
+			\tabcolsep 1pt
+			\centering
+			\caption{学習者コーパス}
+			\label{tab:lerner_corpus}
+			\begin{tabular}{lr}
+				\hline
+				コーパス名 & 文数 \\
+				\hline
+				FCE train ~\cite{yannakoudakis-etal-2011-new} & 28,350 \\
+				NUCLE ~\cite{dahlmeier-etal-2013-building} & 57,113 \\
+				Lang-8 ~\cite{mizumoto-etal-2012-effect} & 498,325 \\
+				W\&I train ~\cite{bryant-etal-2019-bea} & 34,308 \\
+				\hline
+			\end{tabular}
+	\end{minipage}
+	\begin{minipage}[c]{.28\textwidth}
+			\small
+			\centering
+			\tabcolsep 1pt
+			\caption{単言語コーパス}
+			\label{tab:monolingual_corpus}
+			\begin{tabular}{lr}
+				\hline
+				コーパス名 & 文数 \\
+				\hline
+				News Commentary v15 & 594,269 \\
+				News Crawl 15 & 24,334,700 \\
+				News Crawl 16 & 18,238,693 \\
+				News Crawl 17 & 26,861,081 \\
+				News Crawl 18 & 18,113,311 \\
+				News Crawl 19 & 33,600,797 \\
+				Europarl v9 & 2,295,044 \\
+				\hline
+			\end{tabular}
+	\end{minipage}
+\end{table}
+
+\begin{table}[t]
+	\small
+	\centering
+	\tabcolsep 1pt
+	\caption{評価コーパス}
+	\label{tab:eval_corpus}
+	\begin{tabular}{lcc}
+		\hline
+		検証/評価コーパス & 評価尺度(評価器) & 文数(検証/評価) \\
+		\hline
+		BEA-19 valid/test ~\cite{bryant-etal-2019-bea} & $\text{F}_{0.5}$ (ERRANT) & 4,384 / 4,477 \\
+		CoNLL-13/14 ~\cite{ng-etal-2014-conll} & $\text{F}_{0.5}$ (MaxMatch) & 1,381 / 1,312 \\
+		FCE valid/test ~\cite{yannakoudakis-etal-2011-new} & $\text{F}_{0.5}$ (ERRANT) & 2,191 / 2,695 \\
+		JFLEG valid/test ~\cite{napoles-etal-2017-jfleg} & GLEU & 754 / 747 \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\begin{table}[t]
+	\centering
+	\small
+	\tabcolsep 6pt
+	\caption{誤り訂正実験の結果と既存手法との比較}
+	\label{tab:result}
+	\begin{tabular}{lcccc}
+		\hline
+		& \hspace{-2em}{$\def\arraystretch{0.5}\begin{array}{c}\vspace{-0.5em}\\\text{BEA-19}\\\text{test}\\\end{array}$}\hspace{-2em}
+		& \hspace{-2em}{$\def\arraystretch{0.5}\begin{array}{c}\vspace{-0.5em}\\\text{CoNLL}\\\text{14}\\\end{array}$}\hspace{-2em}
+		& \hspace{-2em}{$\def\arraystretch{0.5}\begin{array}{c}\vspace{-0.5em}\\\text{FCE}\\\text{test}\\\end{array}$}\hspace{-2em}
+		& \hspace{-2em}{$\def\arraystretch{0.5}\begin{array}{c}\vspace{-0.5em}\\\text{JFLEG}\\\text{test}\\\end{array}$}\hspace{-2em}
+		\\
+		& (F${}_{0.5}$)
+		& (F${}_{0.5}$)
+		& (F${}_{0.5}$)
+		& (GLEU)
+		\\
+		\hline
+		\hline
+		既存手法 \\
+		Choeら ~\cite{choe-etal-2019-neural}
+		& 69.06 & 60.33 & - & - \\
+		Grundkiewiczら ~\cite{grundkiewicz-etal-2019-neural}
+		& 69.47 & 64.16 & 55.81 & 61.22 \\
+		Omelianchukら ~\cite{omelianchuk-etal-2020-gector}
+		& \textbf{73.7} & 66.5 & - & - \\
+		Lichtargeら ~\cite{lichtarge-etal-2020-data}
+		& 73.0 & \textbf{66.8} & - & \textbf{64.9} \\
+		\hline
+		\hline
+		提案手法 \\
+		ベースライン
+		& - & 53.88 & 49.91 & 57.37 \\
+		+ アンサンブル
+		& 63.78 & 56.49 & 52.94 & 58.02 \\
+		\ \ + リスコア
+		& 65.90 & 61.75 & 54.47 & 61.04 \\
+		\hline
+		事前学習
+		& - & 54.92 & 46.24 & 58.35 \\
+		+ アンサンブル
+		& 60.28 & 55.25 & 46.77 & 58.55 \\
+		\ \ + リスコア
+		& 62.37 & 56.48 & 48.75 & 60.10 \\
+		\hline
+		+ 再学習
+		& - & 63.25 & 56.40 & 62.23 \\
+		\ \ + アンサンブル
+		& 72.19 & 65.13 & 57.70 & 62.72 \\
+		\ \ \ \ + リスコア
+		& 72.51 & \underline{65.43} & 57.87 & \underline{63.69} \\
+		\hline
+		\ \ + ドメイン適応
+		& - & - & 57.59 & - \\
+		\ \ \ \ + アンサンブル
+		& 72.57 & - & 59.21 & - \\
+		\ \ \ \ \ \ + リスコア
+		& \underline{72.76} & - & \textbf{59.05} & - \\
+		\hline
+	\end{tabular}
+\end{table}
+
+再学習に用いる学習者コーパスの種類と規模を表\ref{tab:lerner_corpus}に示す．
+学習者コーパスの入手は，BEA-19 Shared Task \footnote{\url{https://www.cl.cam.ac.uk/research/nl/bea2019st/}} の規定に従う．
+Lang-8コーパスは，誤り文と修正文が同一な事例を除いた文のみを学習に用い，Lang-8コーパス以外のコーパスは，学習時に標本数を3倍にする．
+評価に用いるコーパスの種類と規模，評価尺度を表\ref{tab:eval_corpus}に示す．
+事前学習に用いる単言語コーパスの種類と規模を表\ref{tab:monolingual_corpus}に示す．
+表\ref{tab:monolingual_corpus}中のコーパスは，WMT19のニュースタスクのもの\footnote{\url{http://www.statmt.org/wmt19/translation-task.html}}を用いる．
+誤り生成は，各エポックごとに行う．
+すべてのデータは，記号の正規化などの前処理が施されたのち，BPE-dropout ~\cite{provilkov-etal-2020-bpe} が施される．
+dropout 確率は，誤り文で 0.1，修正文で 0 とする．
+
+ニューラル文法誤り訂正には，Transformer Big ~\cite{NIPS2017_3f5ee243} モデルを用いる．
+実装は \texttt{fairseq} v0.10.1 \footnote{\url{https://github.com/pytorch/fairseq}} を用いる．
+生成は，幅12のビーム探索で行い，スコアは長さ正規化をする．
+実験結果は，5モデルの平均値と，アンサンブル，RoBERTa Large を用いるリスコア~\cite{salazar-etal-2020-masked}によるものを報告する．
+
+\section{結果}
+
+実験結果を表\ref{tab:result}に示す．
+ベースラインでは，学習者コーパスを用いて 50 エポック訓練する．
+事前学習では，単言語コーパスに誤り生成を施した誤りデータを用いて 20 エポック訓練する．
+再学習では，学習者コーパスを用いて 30 エポック訓練する．
+ドメイン適応は，再学習を行ったのちに，評価データとドメインの近い訓練データで追加の学習を行うことである．
+ドメイン適応では，事前学習済みモデルを学習者コーパスすべてで 5 エポック訓練し，さらに，ドメインが同じ学習者コーパスのみを用いて 20 エポック訓練する．
+ドメインが同じ学習者コーパスは，BEA-19 valid/test に対しては，W\&I train，FCE valid/test は FCE train である．
+
+ベースラインと比較すると，提案手法による人工誤りデータを用いて事前学習し，再学習するモデルの性能がすべての評価データセットで高くなっており，
+多様な規則を用いる人工誤り生成が有効であることがわかる．
+アンサンブル，リスコアはともに性能向上に大きく寄与している．
+事前学習済みモデルのスコアは，ベースラインのそれに迫る結果となっているが，
+アンサンブルやリスコアによる性能向上は小さい．
+これは，事前学習済みモデルが，ベースラインモデルと比較して，良い言語モデル的性質を持っており，アンサンブルやリスコアによる恩恵を受けにくいためだと考えられる．
+ドメイン適応による性能向上は，句読法の規約などの，評価データ間で異なっている特徴に適応する効果によると考えられる．
+
+\begin{table}[t]
+	\centering
+	\small
+	\tabcolsep 6pt
+	\caption{誤り生成規則の有無が性能に与える影響の比較}
+	\label{tab:ablation}
+	\begin{tabular}{lccc}
+		\hline
+		& \hspace{-1em}{$\def\arraystretch{0.5}\begin{array}{c}\vspace{-0.5em}\\\text{BEA-19}\\\text{valid}\\\end{array}$}\hspace{-1em}
+		& \hspace{-1em}{$\def\arraystretch{0.5}\begin{array}{c}\vspace{-0.5em}\\\text{CoNLL}\\\text{14}\\\end{array}$}\hspace{-1em}
+		& \hspace{-1em}{$\def\arraystretch{0.5}\begin{array}{c}\vspace{-0.5em}\\\text{JFLEG}\\\text{test}\\\end{array}$}\hspace{-1em}
+		\\ \hline
+		ベースライン
+		& 51.17 & 61.75 & 61.04 \\
+		\hline
+		\multicolumn{3}{l}{1カテゴリのみ}
+		\\
+		+機能語誤り
+		& 50.83 & 62.09 & 60.41 \\
+		+活用誤り
+		& 50.25 & 61.34 & 60.31 \\
+		+表記体系誤り
+		& 51.93 & 62.24 & 60.60 \\
+		+単語選択誤り
+		& 50.87 & 60.63 & 60.25 \\
+		+語順誤り
+		& 50.00 & 59.46 & 60.01 \\
+		\hline
+		\multicolumn{3}{l}{1カテゴリ除く}
+		\\
+		-機能語誤り
+		& 52.87 & 62.56 & 61.41 \\
+		-活用誤り
+		& 52.98 & 61.58 & 61.62 \\
+		-表記体系誤り
+		& 52.38 & 63.64 & 60.79 \\
+		-単語選択誤り
+		& 53.33 & 63.68 & 61.45 \\
+		-語順誤り
+		& 52.72 & 64.15 & 61.60 \\
+		\hline
+		全誤り生成規則
+		& 53.05 & 63.86 & 61.81 \\
+		\hline
+	\end{tabular}
+\end{table}
+
+誤り生成において，特定のカテゴリの誤り生成規則のみを用いる場合と，
+特定のカテゴリの誤り生成規則を除く場合の
+性能の変化をカテゴリごとに調べるために，
+誤り生成規則の5カテゴリについて，1つのみを用いるか，1つを除く800万文で，事前学習を10エポック行い，再学習，アンサンブル，リスコアを行った結果を
+表\ref{tab:ablation}にまとめた．
+1カテゴリの規則のみを用いる場合は，ベースラインと同程度かそれ以下となる．
+これは，事前学習に用いるデータでの誤りの種類が多様でない場合には，規則による誤り生成が有効ではない可能性を示している．
+1カテゴリの規則のみを取り除く場合の性能は，すべての規則を用いる場合と比較して，性能が大きくは変わらない．
+これは事前学習に用いるデータにおける誤りの偏りが小さいことが有効であることを支持している．
+また，評価データによっては，特定の誤りカテゴリがない方がスコアが高くなる．
+この原因を調べるためには，各誤り生成規則がスコアに与える影響を評価する方法を検討する必要がある．
+
+\begin{figure}[t]
+	\centering
+	\small
+	\begin{tikzpicture}
+		\begin{axis}[
+			ytick scale label code/.code={},
+			xtick=data,
+			height=5.0cm,
+			xticklabels={0M,4M,8M,16M,32M},
+			width=8cm,
+			grid=major,
+			xlabel={誤り生成に用いる単言語コーパスの文数},
+			ylabel={$\text{F}_{0.5}$},
+			xlabel near ticks, xlabel shift={-2pt},
+			ylabel near ticks, ylabel shift={-2pt},
+			legend style={
+				cells={anchor=west},
+				legend pos=south east,
+			}]
+			\addplot coordinates {(0, 51.17) (4, 51.88) (8, 53.05)  (16, 54.30)  (32, 54.35)};
+			\addplot coordinates {(4, 53.71) (8, 54.24) (16, 54.30)  (32, 54.11)};
+			\legend{\text{エポック数を10に固定}, \text{総ステップ数が一定}}
+		\end{axis}
+	\end{tikzpicture}
+	\caption{事前学習データのエポック数・ステップ数による BEA-19 valid データセット上での性能変化}
+	\label{fig:steps1}
+\end{figure}
+
+逆翻訳を用いる人工誤り生成手法では，事前学習に用いるデータを大きくすると
+モデルの訂正性能が向上することが確認されている~\cite{kiyono-etal-2019-empirical}．
+図\ref{fig:steps1}の青線「エポック数を10に固定」は，事前学習に用いる単言語コーパスの文数を400万文，800万文，1,600万文，3,200万文に変化させたとき，エポック数を10回に固定することで，総ステップ数が単言語コーパスの文数に比例する条件で事前学習を行い，再学習，アンサンブル，リスコアし，BEA-19 valid データセット上で評価した結果である．
+実験結果から，既存の報告と同様に，事前学習に用いるデータの規模が性能向上に寄与することがわかる．
+
+しかし，この実験設定では，訂正性能の向上は単言語コーパスの規模の増加によるものか，事前学習の総ステップ数の増加によるものかの区別がつかない．
+そこで，単言語コーパスの規模を大きくしても学習の総ステップ数がおおよそ一定になるように，エポック数を調整した条件で実験を行った．
+図\ref{fig:steps1}の赤線「総ステップ数が一定」は，事前学習に用いる単言語コーパスの文数を400万文，800万文，1,600万文，3,200万文と変化させたとき，エポック数をそれぞれ40, 20, 10, 5回に設定することで，総ステップ数が同程度になる条件で事前学習を行った結果である．
+実験結果から，総ステップ数を揃えた場合，単言語コーパスが比較的小規模（400万文や800万文）の場合も，高い性能を示すことがわかる．
+これは，事前学習に用いる誤りデータでは，同じ文に対してもエポックごとに異なる誤りを生成させているためだと考えられる．
+また，このことは，単言語コーパスの規模が小さな言語に対しても，適切な誤り生成規則を設計すれば，高性能なモデルを学習できる可能性を示している．
+
+\begin{figure}[t]
+	\centering
+	\small
+	\begin{tikzpicture}
+		\begin{axis}[
+				ybar,
+				ymin=0,
+				ymax=100,
+				width=8.5cm,
+				height=5.5cm,
+				xlabel near ticks, xlabel shift={-2pt},
+				ylabel near ticks, ylabel shift={-6pt},
+				bar width=0.22cm,
+				legend style={at={(0.5,-0.20)},
+				anchor=north,legend columns=-1},
+				ylabel={F${}_{0.5}$},
+				symbolic x coords={DET, ORTH, PREP, PRON, PUNCT, SPELL},
+				xtick=data,
+				nodes near coords,
+				every node near coord/.append style={rotate=90, anchor=west, xshift=-0.7cm, font=\fontsize{6.5pt}{0.5pt}\selectfont},
+			]
+			\addplot coordinates {(DET, 70.24) (ORTH, 75.77) (PREP, 65.56) (PRON, 67.12) (PUNCT, 78.17) (SPELL, 76.12)};
+			\addplot coordinates {(DET, 75.67) (ORTH, 82.10) (PREP, 71.81) (PRON, 68.47) (PUNCT, 67.87) (SPELL, 82.71)};
+			\addplot coordinates {(DET, 75.49) (ORTH, 87.23) (PREP, 69.63) (PRON, 73.38) (PUNCT, 76.78) (SPELL, 89.06)};
+			\legend{
+				Choeら ~\cite{choe-etal-2019-neural},
+				Grundkiewiczら ~\cite{grundkiewicz-etal-2019-neural},
+				提案手法}
+		\end{axis}
+	\end{tikzpicture}
+	\caption{従来手法とのBEA-19 test データセットでのERRANT誤り種類ごとの性能比較}
+	\label{fig:confusion}
+\end{figure}
+
+従来の規則による誤り生成手法と，提案手法を比較するために，
+表\ref{tab:result}のBEA-19 testデータセットでの，ERRANT~\cite{bryant-etal-2017-automatic} 誤り種類の一部に対しての訂正性能の比較を図\ref{fig:confusion}に示す．
+正書法の誤り(ORTH)や綴り誤り(SPELL)では，提案手法は従来手法よりも高い性能を示している．
+これは，提案手法の表記体系の誤りの生成が有効であることを示している．
+Choeらの手法~\cite{choe-etal-2019-neural}と提案手法は，ドメイン適応を行っているが，
+句読法の誤り(PUNCT)の性能が高い．
+これは，句読法はドメインごとに規約が異なるためだと考えられる．
+冠詞誤り(DET)や，前置詞誤り(PREP)，代名詞誤り(PRON)などの機能語誤りでは，規則による誤り生成を行う従来手法との単純な比較は難しい．
+機能語誤りのように訂正に前後の文脈を要する誤りの生成においては，
+規則による誤り生成は
+機械翻訳による誤り生成と比較して
+質が劣ると考えられる．
+その検証は，今後の課題である．
+
+\section{おわりに}
+本研究では，多様な誤りに対して誤り生成規則を定義し，それらを組み合わせた人工誤り生成の枠組みを提案した．
+実験を通して，
+多様な規則を用いる誤り生成は，ニューラル文法誤り訂正の事前学習のためのデータ拡張手法として効果的であることが示された．
+さらに，
+誤り生成規則の多様性は，文法誤り訂正の事前学習の効果を向上させることがわかった．
+また，人工誤りデータの生成に用いる単言語コーパスが小規模な場合でも，条件によっては高性能な訂正モデルを学習できる可能性も判明した．
+
+\paragraph{謝辞}
+本研究成果は，「産総研・東工大 実社会ビッグデータ活用 オープンイノベーションラボラトリ」により得られたものです．
+
+%%%%  ここまでが本文　4ページ以内
+
+% 参考文献
+\bibliographystyle{junsrt}
+\bibliography{j_yourrefs}
+
+%%%%  ここまでが本文+参考文献　5ページ以内
+
+
+% 付録(Appendix)
+% 付録を付けない場合は、以下\end{document}以外を全てをコメントアウトする．
+% 本文、参考文献に続けて作成する場合は、必ず \clearpage して新たなページとする
+\clearpage
+% 付録は別ツールで作成して、後で本文PDFに追加する方式でもよい
+\appendix
+
+\begin{table*}[t]
+	\centering
+	\small
+	\tabcolsep 1.2pt
+	\caption{誤り訂正実験の結果と既存手法との比較}
+	\label{tab:result2}
+	\begin{tabular}{@{\extracolsep{2.5pt}}l ccc ccc|c ccc|cccc|cc@{}}
+		\hline
+		& \multicolumn{6}{c}{BEA-19}
+		& \hspace{-2em}CoNLL-13\hspace{-2em}
+		& \multicolumn{3}{c}{CoNLL-14}
+		& \multicolumn{4}{c}{FCE}
+		& \multicolumn{2}{c}{JFLEG}
+		\\ \cline{2-7} \cline{8-8} \cline{9-11} \cline{12-15} \cline{16-17}
+		& \multicolumn{3}{c}{valid}
+		& \multicolumn{3}{c}{test}
+		& \hspace{-2em}(valid)\hspace{-2em}
+		& \multicolumn{3}{c}{(test)}
+		& \hspace{-2em}valid\hspace{-2em}
+		& \multicolumn{3}{c}{test}
+		& \hspace{-2em}valid\hspace{-2em}
+		& \hspace{-2em}test\hspace{-2em}
+		\\ \cline{2-4} \cline{5-7} \cline{8-8} \cline{9-11} \cline{12-12} \cline{13-15} \cline{16-16} \cline{17-17}
+		& P & R & \multicolumn{1}{c}{$\textrm{F}_{0.5}$}
+		& P & R & \multicolumn{1}{c}{$\textrm{F}_{0.5}$}
+		& $\textrm{F}_{0.5}$
+		& P & R & \multicolumn{1}{c}{$\textrm{F}_{0.5}$}
+		& $\textrm{F}_{0.5}$
+		& P & R & \multicolumn{1}{c}{$\textrm{F}_{0.5}$}
+		& \hspace{-1em}GLEU\hspace{-1em}
+		& \hspace{-1em}GLEU\hspace{-1em}
+		\\
+		\hline
+		\hline
+		既存手法 \\
+		Choeら ~\cite{choe-etal-2019-neural}
+		& 63.54 & 31.48 & 52.79
+		& 76.19 & 50.25 & 69.06
+		& - & 74.76 & 34.05 & 60.33
+		& - & - & - & -
+		& - & - \\
+		Grundkiewiczら ~\cite{grundkiewicz-etal-2019-neural}
+		& 59.1 & 36.8 & 53.00
+		& 72.28 & 60.12 & 69.47
+		& - & - & - & 64.16
+		& - & - & - & 55.81
+		& - & 61.22 \\
+		Xuら ~\cite{xu-etal-2019-erroneous}
+		& - & - & 55.37
+		& 70.14 & 57.57 & 67.21
+		& - & 73.0 & 41.1 & 63.2
+		& - & - & - & -
+		& - & 62.6 \\
+		Kiyonoら ~\cite{kiyono-etal-2019-empirical}
+		& - & - & -
+		& 74.7 & 56.7 & 70.2
+		& - & 72.4 & 46.1 & 65.0
+		& - & - & - & -
+		& - & 61.4 \\
+		Omelianchukら ~\cite{omelianchuk-etal-2020-gector}
+		& - & - & -
+		& 79.4 & 57.2 & \textbf{73.7}
+		& - & 78.2 & 41.5 & 66.5
+		& - & - & - & -
+		& - & - \\
+		Lichtargeら ~\cite{lichtarge-etal-2020-data}
+		& - & - & -
+		& 75.4 & 64.7 & 73.0
+		& - & 74.7 & 46.9 & \textbf{66.8}
+		& - & - & - & -
+		& - & \textbf{64.9} \\
+		\hline
+		\hline
+		提案手法 \\
+		ベースライン
+		& 52.13 & 28.54 & 44.73 
+		& - & - & - 
+		& 37.18 & 66.35 & 30.82 & 53.88 
+		& 51.47 & 58.56 & 31.46 & 49.91 
+		& 52.57 & 57.37 \\
+		+ アンサンブル
+		& 58.37 & 28.47 & 48.24 
+		& 70.07 & 46.91 & 63.78 
+		& 37.58 & 72.24 & 30.17 & 56.49 
+		& 55.20 & 63.68 & 31.61 & 52.94 
+		& 52.77 & 58.02 \\
+		++ リスコア
+		& 59.15 & 33.23 & 51.17 
+		& 69.97 & 53.45 & 65.90 
+		& 43.37 & 70.27 & 41.59 & 61.75 
+		& 55.64 & 63.78 & 34.38 & 54.47 
+		& 55.55 & 61.04 \\
+		\hline
+		事前学習
+		& 52.58 & 22.96 & 41.79 
+		& - & - & - 
+		& 37.48 & 66.43 & 32.43 & 54.92 
+		& 43.61 & 56.53 & 26.77 & 46.24 
+		& 52.97 & 58.35 \\
+		+ アンサンブル
+		& 53.51 & 22.77 & 42.14 
+		& 65.93 & 44.89 & 60.28 
+		& 37.28 & 67.23 & 32.26 & 55.25 
+		& 44.58 & 57.51 & 26.78 & 46.77 
+		& 53.05 & 58.55 \\
+		++ リスコア
+		& 53.35 & 27.19 & 44.74 
+		& 66.01 & 51.10 & 62.37 
+		& 40.14 & 63.51 & 39.15 & 56.48 
+		& 46.95 & 56.77 & 31.15 & 48.75 
+		& 54.79 & 60.10 \\
+		\hline
+		+ 再学習
+		& 60.61 & 35.03 & 52.83 
+		& - & - & - 
+		& 46.74 & 70.82 & 44.44 & 63.25 
+		& 56.12 & 64.25 & 38.02 & 56.40 
+		& 56.45 & 62.23 \\
+		++ アンサンブル
+		& 62.38 & 34.94 & 53.91 
+		& 76.61 & 58.67 & 72.19 
+		& 48.18 & 73.57 & 44.64 & 65.13 
+		& 57.33 & 66.32 & 37.96 & 57.70 
+		& 56.79 & 62.72 \\
+		+++ リスコア
+		& 61.75 & 37.50 & 54.68 
+		& 75.79 & 61.81 & 72.51 
+		& \underline{49.74} & 70.82 & 50.16 & \underline{65.43} 
+		& 57.48 & 65.50 & 39.48 & 57.87 
+		& \underline{58.17} & \underline{63.69} \\
+		\hline
+		++ ドメイン適応
+		& 58.33 & 42.36 & 54.24 
+		& - & - & - 
+		& - & - & - & - 
+		& 56.69 & 64.21 & 40.83 & 57.59 
+		& - & - \\
+		+++ アンサンブル
+		& 61.11 & 43.09 & 56.39 
+		& 74.89 & 64.54 & 72.57 
+		& - & - & - & - 
+		& 58.38 & 66.63 & 40.95 & 59.21 
+		& - & - \\
+		++++ リスコア
+		& 60.93 & 43.75 & \underline{56.49} 
+		& 74.84 & 65.51 & \underline{72.76} 
+		& - & - & - & -
+		& \underline{58.51} & 65.39 & 42.54 & \textbf{59.05} 
+		& - & - \\
+		\hline
+	\end{tabular}
+\end{table*}
+
+\begin{figure*}[t]
+	\centering
+	\small
+	\begin{minipage}{0.24\hsize}
+		\centering
+		\small
+		\begin{tikzpicture}
+			\begin{axis}[
+				ytick scale label code/.code={},
+				xtick=data,
+				height=3.5cm,
+				xticklabels={0,,8M,16M,32M},
+				width=4.5cm,
+				grid=major,
+				xlabel={単言語コーパスの文数},
+				ylabel={$\text{F}_{0.5}$},
+				xlabel near ticks, xlabel shift={-2pt},
+				ylabel near ticks, ylabel shift={-2pt},
+				legend style={
+					cells={anchor=west},
+					legend pos=south east,
+				}]
+				\addplot coordinates {(0, 61.75) (4, 62.67) (8, 63.86)  (16, 63.86)  (32, 64.43)};
+				\addplot coordinates {           (4, 63.70) (8, 64.66)  (16, 63.86)  (32, 65.35)};
+			\end{axis}
+		\end{tikzpicture}
+		\caption{事前学習データのエポック数・ステップ数による CoNLL-14 test データセット上での性能変化}
+		\label{fig:steps2}
+	\end{minipage}
+	\begin{minipage}{0.24\hsize}
+		\centering
+		\small
+		\begin{tikzpicture}
+			\begin{axis}[
+				ytick scale label code/.code={},
+				xtick=data,
+				height=3.5cm,
+				xticklabels={0,,8M,16M,32M},
+				width=4.5cm,
+				grid=major,
+				xlabel={単言語コーパスの文数},
+				ylabel={$\text{F}_{0.5}$},
+				xlabel near ticks, xlabel shift={-2pt},
+				ylabel near ticks, ylabel shift={-2pt},
+				legend style={
+					cells={anchor=west},
+					legend pos=south east,
+				}]
+				\addplot coordinates {(0, 54.47) (4, 54.03) (8, 54.85)  (16, 55.94)  (32, 56.34)};
+				\addplot coordinates {           (4, 56.59) (8, 56.07)  (16, 55.94)  (32, 56.17)};
+			\end{axis}
+		\end{tikzpicture}
+		\caption{事前学習データのエポック数・ステップ数による FCE test データセット上での性能変化}
+		\label{fig:steps3}
+	\end{minipage}
+	\begin{minipage}{0.24\hsize}
+		\centering
+		\small
+		\begin{tikzpicture}
+			\begin{axis}[
+				ytick scale label code/.code={},
+				xtick=data,
+				height=3.5cm,
+				xticklabels={0,,8M,16M,32M},
+				width=4.5cm,
+				grid=major,
+				xlabel={単言語コーパスの文数},
+				ylabel={$\text{F}_{0.5}$},
+				xlabel near ticks, xlabel shift={-2pt},
+				ylabel near ticks, ylabel shift={-2pt},
+				legend style={
+					cells={anchor=west},
+					legend pos=south east,
+				}]
+				\addplot coordinates {(0, 61.04) (4, 61.03) (8, 61.81)  (16, 62.59)  (32, 62.99)};
+				\addplot coordinates {           (4, 61.92) (8, 62.72)  (16, 62.59)  (32, 62.58)};
+			\end{axis}
+		\end{tikzpicture}
+		\caption{事前学習データのエポック数・ステップ数による JFLEG test データセット上での性能変化}
+		\label{fig:steps4}
+	\end{minipage}
+	\begin{minipage}{0.24\hsize}
+	\centering
+	\small
+	\begin{tikzpicture}
+		\begin{axis}[
+			ytick scale label code/.code={},
+			xtick=data,
+			height=3.5cm,
+			xticklabels={0 , , 0.1, , 0.2},
+			width=4.5cm,
+			grid=major,
+			xlabel={dropout 確率},
+			ylabel={$\text{F}_{0.5}$},
+			xlabel near ticks, xlabel shift={-2pt},
+			ylabel near ticks, ylabel shift={-2pt},
+			legend style={
+				cells={anchor=west},
+				legend pos=south east,
+			}]
+			\addplot coordinates {(0, 48.16) (5, 50.76)  (10, 51.17)  (15, 50.58) (20, 50.37)};
+		\end{axis}
+	\end{tikzpicture}
+	\caption{BPE-dropout の dropout率による BEA-19 valid データセット上での性能変化}
+	\label{fig:dropout}
+	\end{minipage}
+\end{figure*}
+
+\begin{table}[h]
+	\centering
+	\small
+	\tabcolsep 1.2pt
+	\caption{誤り生成規則の有無が性能に与える影響の比較}
+	\label{tab:ablation2}
+	\begin{tabular}{@{\extracolsep{2.5pt}}l ccc ccc@{}}
+		\hline
+		& \multicolumn{3}{c}{BEA-19 valid}
+		& \multicolumn{3}{c}{CoNLL-14}
+		\\ \cline{2-4} \cline{5-7}
+		& P & R & $\textrm{F}_{0.5}$
+		& P & R & $\textrm{F}_{0.5}$
+		\\ \hline
+		ベースライン
+		& 59.15 & 33.23 & 51.17
+		& 70.27 & 41.59 & 61.75
+		\\
+		\hline
+		\multicolumn{7}{l}{事前学習（人工誤り・1カテゴリのみ）+再学習}
+		\\
+		+機能語誤り
+		& 59.05 & 32.65 & 50.83
+		& 71.08 & 41.23 & 62.09
+		\\
+		+活用誤り
+		& 58.49 & 32.13 & 50.25
+		& 69.09 & 42.35 & 61.34
+		\\
+		+表記体系誤り
+		& 60.30 & 33.39 & 51.93
+		& 70.96 & 41.73 & 62.24
+		\\
+		+単語選択誤り
+		& 58.80 & 33.05 & 50.87
+		& 68.15 & 42.07 & 60.63
+		\\
+		+語順誤り
+		& 57.80 & 32.48 & 50.00
+		& 66.24 & 42.18 & 59.46
+		\\
+		\hline
+		\multicolumn{7}{l}{事前学習（人工誤り・1カテゴリ除く）+再学習}
+		\\
+		-機能語誤り
+		& 58.95 & 37.42 & 52.87
+		& 69.13 & 45.34 & 62.56
+		\\
+		-活用誤り
+		& 59.36 & 37.05 & 52.98
+		& 67.21 & 46.14 & 61.58
+		\\
+		-表記体系誤り
+		& 60.10 & 34.61 & 52.38
+		& 72.64 & 42.55 & 63.64
+		\\
+		-単語選択誤り
+		& 61.03 & 35.45 & 53.33
+		& 71.98 & 43.58 & 63.68
+		\\
+		-語順誤り
+		& 61.13 & 34.00 & 52.72
+		& 73.13 & 43.03 & 64.15
+		\\
+		\hline
+		事前学習+再学習
+		& 60.03 & 36.21 & 53.05
+		& 70.92 & 45.66 & 63.86
+		\\
+		\hline
+	\end{tabular}
+\end{table}
+
+\section{実験結果の詳細}
+表\ref{tab:result}のより詳細な結果を表\ref{tab:result2}に示す．
+再学習を行った場合，ベースラインより特に再現率が高くなる．
+多様な人工誤り生成を行った誤りデータでの事前学習が，多様な誤りの訂正性能に寄与することが確認できる．
+ドメイン適応は，評価データ間の規約の差異を埋め，再現率を向上させる．
+
+表\ref{tab:ablation}の詳細な結果を表\ref{tab:ablation2}に示す．
+
+図\ref{fig:steps1}と同じ実験を
+BEA-19 valid データセット以外で行った結果を
+図\ref{fig:steps2},\ref{fig:steps3},\ref{fig:steps4}に示す．
+他のデータセットでも図\ref{fig:steps1}と同様の結果が確認できる．
+
+BPE-dropout の dropout 確率を変化させたときのベースラインモデルの BEA-19 valid データセットでの性能変化を図\ref{fig:dropout}に示す．
+
+\end{document}
+
