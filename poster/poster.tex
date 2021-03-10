@@ -1,0 +1,673 @@
+\documentclass[11pt]{beamer}
+
+% beamer posterの利用に関する設定
+% A0 に合わせて 4 : 3 に
+\usepackage[orientation=landscape,size=custom,width=112,height=84,scale=2.0]{beamerposter}
+
+% メインフォントに関する設定
+\usepackage{fontspec}
+\setmainfont[Ligatures=TeX,BoldFont=Noto Sans Bold]{Noto Sans}
+
+% CJKに対応させる
+% 太字フォントを指定しないと疑似ボールドになる
+\usepackage{xeCJK}
+\setCJKmainfont[BoldFont=Noto Sans CJK JP Bold]{Noto Sans CJK JP}
+
+% 追加のフォント
+\newfontfamily{\notosansmono}{Noto Sans Mono}
+
+% tikz
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{bchart}
+\usetikzlibrary{positioning}
+\usetikzlibrary{arrows.meta}
+
+% beamerのテーマ・スタイルに関する設定
+\setbeamertemplate{navigation symbols}{} % 右下のナビゲーションアイコンに消えてもらう
+\setbeamercolor{normal text}{fg=black,bg=white}
+\setbeamercolor{structure}{fg=red}
+
+% blockのスタイル
+\usepackage[most]{tcolorbox} % mostがないとenhanced(tikzを用いる装飾表現)が使えない
+\setbeamertemplate{block begin}{
+	\begin{tcolorbox}[
+				enhanced,
+				fonttitle=\bfseries,
+				colframe=gray,
+				colback=gray!5!,
+				colbacktitle=gray!80,
+				attach boxed title to top left={yshift=-2mm, xshift=2mm},
+				title=\insertblocktitle
+			]
+		\vskip2mm
+}
+\setbeamertemplate{block end}{
+	\end{tcolorbox}
+}
+
+% href
+\usepackage{hyperref}
+\hypersetup{
+	colorlinks=true,
+	linkcolor=blue,
+	filecolor=magenta,
+	urlcolor=cyan,
+	pdfnewwindow=true}
+
+% その他
+\usepackage{fancybox}
+\usepackage{here}
+
+\begin{document}
+\begin{frame}[t]
+	\vskip0.5em
+	\begin{columns}[t]
+		\begin{column}{.10\linewidth}
+			\raggedleft
+			\Large
+			P5-18
+		\end{column}
+
+		\begin{column}{.80\linewidth}
+			\centering
+			{\Large ニューラル文法誤り訂正のための多様な規則を用いる人工誤り生成}
+			\vskip0.3em
+
+			$\underset{
+				\hspace{-100em}
+				\text{\small (東工大\ 岡崎研\ 修士１年)}
+				\hspace{-100em}
+			}{
+				\underline{\text{古山翔太}}
+			}$
+			\hskip2.5em 高村大也
+			\hskip2.5em 岡崎直観
+			\hskip2em （東工大/産総研）
+		\end{column}
+
+		\begin{column}{.10\linewidth}
+			\raggedright
+			\vspace*{-3cm}
+			\begin{figure}[H]
+				\hspace*{-16cm}
+				\vspace*{-11cm}
+				\includegraphics[width=6cm]{logo.png}
+			\end{figure}
+			\vspace*{6cm}
+			\begin{figure}[H]
+				\hspace*{-2cm}
+				\vspace*{4cm}
+				\includegraphics[width=10cm]{banneraist.png}
+			\end{figure}
+		\end{column}
+	\end{columns}
+
+	\vspace*{-0.5em}
+
+	\begin{columns}[t]
+		\begin{column}{.33\linewidth}
+
+			\vspace*{-0.3em}
+			\begin{figure}[H]
+				\centering
+				\begin{tikzpicture}[
+							font=\sffamily,
+							scale=1.0,
+							transform shape]
+						\node[
+								rectangle,
+								text width=180,
+								text height=50,
+								fill=blue!20,
+								draw=black,
+								outer sep=1mm
+							] at (0, 0) {};
+						\node at (0, 0) {\textbf{概要}};
+				\end{tikzpicture}
+			\end{figure}
+			\vspace*{-0.8em}
+
+			\begin{tcolorbox}[
+				enhanced,
+				fonttitle=\bfseries,
+				colframe=gray,
+				colback=gray!5!,
+				colbacktitle=gray!80,
+				attach boxed title to top left={yshift=-2mm, xshift=2mm},
+			]
+				\begin{itemize}
+					\item 文法誤り訂正の事前学習のデータをルールベースで人工的に生成
+					\item 多様なルールの組合せが効果的
+				\end{itemize}
+			\end{tcolorbox}
+			\vspace*{-0.5em}
+
+			\begin{figure}[H]
+				\centering
+				\begin{tikzpicture}[
+							font=\sffamily,
+							scale=1.0,
+							transform shape]
+						\node[
+								rectangle,
+								text width=180,
+								text height=50,
+								fill=blue!20,
+								draw=black,
+								outer sep=1mm
+							] at (0, 0) {};
+						\node at (0, 0) {\textbf{背景}};
+				\end{tikzpicture}
+			\end{figure}
+			\vspace*{-0.8em}
+
+			\begin{block}{
+					\begin{tabular}{l}
+						ニューラル文法誤り訂正のパラダイム \hspace{2em} \\
+						\multicolumn{1}{r}{
+							「事前学習＋再学習」
+						}
+					\end{tabular}}
+				\begin{figure}[h]
+					\centering
+					\begin{tikzpicture}[
+							>=latex,
+							font=\sffamily,
+							scale=1.0,
+							transform shape]
+						\node[
+								rectangle,
+								text width=180,
+								text height=120,
+								rounded corners=20mm,
+								draw=green,
+								fill=green!20,
+								outer sep=5mm
+							] (data1) at (0, 8) {};
+						\node[
+								rectangle,
+								text width=150,
+								text height=100,
+								rounded corners=20mm,
+								draw=green,
+								fill=green!20,
+								outer sep=5mm
+						] (data2) at (12, 8) {};
+						\node at (0, 9) {\large 人工};
+						\node at (0, 7) {\large データ};
+						\node at (12, 9) {\small 学習者};
+						\node at (12, 7) {\small コーパス};
+						\draw[-{Triangle[width=16pt,length=8pt]}, line width=2pt] (-6, 8) -- (-4, 8);
+						\draw[-{Triangle[width=16pt,length=8pt]}, line width=2pt] (18, 8) -- (16, 8);
+						\node at (-8.5, 8.75) {\small 大規模};
+						\node at (-8.5, 7.25) {\small に作る};
+						\node at (20.5, 8.75) {\small 増やす};
+						\node at (20.5, 7.25) {\small の大変};
+						\node[
+								rectangle,
+								text width=100,
+								text height=80,
+								rounded corners,
+								draw=blue,
+								fill=blue!20,
+								outer sep=1mm
+							] (pretrain) at (0, 0) {};
+						\node[
+								rectangle,
+								text width=100,
+								text height=80,
+								rounded corners,
+								draw=blue,
+								fill=blue!20,
+								outer sep=1mm
+							] (finetune) at (12, 0) {};
+						\draw[-{Triangle[width=30pt,length=16pt]}, line width=2pt] (0, 5.3) -- (pretrain);
+						\draw[-{Triangle[width=30pt,length=16pt]}, line width=2pt] (12, 5.3) -- (finetune);
+						\draw[-{Triangle[width=30pt,length=16pt]}, line width=2pt] (pretrain) -- (finetune);
+						\node[anchor=east] at (-0.3, 4) {事前学習};
+						\node[anchor=west] at (12.3, 4) {再学習};
+						\node at (6, -1.0) {\small 事前学習};
+						\node at (6, -2.5) {\small 済みモデル};
+						\node at (0, +0.7) {\small Trans-};
+						\node at (0, -0.7) {\small former};
+						\node at (12, +0.7) {\small Trans-};
+						\node at (12, -0.7) {\small former};
+					\end{tikzpicture}
+				\end{figure}
+				大規模な \textbf{人工データ} による\textbf{事前学習}
+				\\
+				\hspace*{0.5em} + \textbf{学習者コーパス} による\textbf{再学習}が主流
+				\vskip0.2em
+				\begin{itemize}
+					\item ``人工データ''をどのように作るかが重要
+				\end{itemize}
+			\end{block}
+
+			\begin{block}{人工誤り生成とは？ \ \ その課題は？}
+				\begin{figure}[H]
+					\centering
+					\begin{tikzpicture}[
+							font=\sffamily,
+							scale=1.0,
+							transform shape]
+						\node (x) at (0, 6) {I went \textcolor{blue}{to} Tokyo.};
+						\node (y) at (22, 2.8) {I went \textcolor{red}{for} Tokyo.};
+						\node[
+								rectangle,
+								text width=240,
+								text height=70,
+								rounded corners,
+								draw=red,
+								fill=red!20,
+								outer sep=1mm
+							] (s) at (8, 3) {};
+						\node at (8, 3.8) {\small 誤り生成規則};
+						\node at (8, 2.2) {\small ``to $\to$ for''};
+						\draw[-{Triangle[width=30pt,length=16pt]}, line width=2pt] (x.south) -- (0, 3) -- (s.west);
+						\draw[-{Triangle[width=30pt,length=16pt]}, line width=2pt] (s.east) -- (15.3, 3);
+						\draw[-{Triangle[width=30pt,length=16pt]}, line width=2pt, dashed] (17, 4.0) -- (17, 6) -- (x.east);
+						\node at (22.0, 6.5) {\small 訂正モデルは};
+						\node at (22.0, 5.0) {\small 逆を学習};
+					\end{tikzpicture}
+				\end{figure}
+				\vskip0.2em
+				文法誤り訂正の学習データを作るために，人工的に誤りデータを生成すること
+				\vskip0.2em
+				\begin{itemize}
+					\item 本研究ではルールベースで誤り生成
+						\begin{itemize}
+							\item \normalsize 少ないルールでは誤り文が偏る...
+						\end{itemize}
+				\end{itemize}
+				\begin{itemize}
+					\item 多くのルールを用いて良い誤り文を偏りなく，多様に生成したい！
+					\item 人工誤りデータの質が向上し，文法誤り訂正の性能向上が期待
+				\end{itemize}
+				\vspace*{0.3em}
+			\end{block}
+
+		\end{column}
+
+		\begin{column}{.33\linewidth}
+
+			\vspace*{-0.3em}
+			\begin{figure}[H]
+				\centering
+				\begin{tikzpicture}[
+							font=\sffamily,
+							scale=1.0,
+							transform shape]
+						\node[
+								rectangle,
+								text width=180,
+								text height=50,
+								fill=blue!20,
+								draw=black,
+								outer sep=1mm
+							] at (0, 0) {};
+						\node at (0, 0) {\textbf{手法}};
+				\end{tikzpicture}
+			\end{figure}
+			\vspace*{-0.8em}
+
+			\begin{block}{どのように多様な誤り文を生成するか？}
+				\begin{figure}[h]
+					\centering
+					\begin{tikzpicture}[
+							font=\sffamily,
+							scale=1.0,
+							transform shape]
+						\node[
+								rectangle,
+								text width=950,
+								text height=40,
+								rounded corners,
+								draw=blue,
+								fill=blue!20,
+								outer sep=3mm
+							] (s) at (16, 0) {};
+						\node[anchor=west] at (-1, 0) {\footnotesize 修正文としての文法的な文};
+						\foreach \x / \y in {0/ I, 1/ went, 2/ to, 3/Tokyo, 4/.}{
+							\node at (\x * 4 + 16, 0) {\small \y};}
+						\draw[-{Triangle[width=48pt,length=16pt]}, line width=16pt] (16, -1.5) -- (16, -2.5);
+
+						\node[
+								rectangle,
+								text width=950,
+								text height=160,
+								rounded corners,
+								draw=blue,
+								fill=blue!20,
+								outer sep=3mm
+							] (s) at (16, -6.0) {};
+						\node[anchor=west] at (-1.5, -3.3) {\small ルール1};
+						\node[anchor=west] at (-1.0, -4.6) {\footnotesize  「前置詞 to」};
+						\node[
+								rectangle,
+								text width=260,
+								text height=80,
+								rounded corners,
+								draw=green,
+								fill=green!20,
+								outer sep=3mm
+							] (s) at (4.5, -7.3) {};
+						\node at (2, -5.8) {\scriptsize ベータ分布};
+						\node at (2.2, -7.2) {\scriptsize $\mu$ = 0.05};
+						\node at (2.2, -8.2) {\scriptsize $\sigma$ = 0.05};
+						\node at (5.2, -7.7) {\scriptsize $\rightsquigarrow$};
+						\node at (7.5, -6.5) {\scriptsize 閾値};
+						\node at (7.5, -7.7) {\scriptsize 0.2};
+						\node[
+								rectangle,
+								text width=12,
+								text height=8,
+								rounded corners,
+								draw=green,
+								fill=green!20,
+								outer sep=0mm
+							] (s) at (24.15, -4.0) {};
+						\foreach \x / \y in {0/ I, 1/ went, 2/ to, 3/Tokyo, 4/.}{
+							\node at (\x * 4 + 16, -4.0) {\small \y};}
+						\node at (25, -3.2) {\tiny \textcolor{red}{OK}};
+						\draw[-{Triangle[width=16pt,length=16pt]}, line width=4pt] (24.15, -4.5) -- (24.15, -5.5);
+						\draw[-{Triangle[width=16pt,length=16pt]}, line width=4pt] (24.15, -6.5) -- (24.15, -7.5);
+						\draw[-{Triangle[width=8pt,length=16pt]}, line width=1pt] (8.5, -7.7) -- (20.15, -6.0);
+						\node at (21.15, -6.0) {\footnotesize 0.2};
+						\node at (22.65, -6.0) {\footnotesize $>$};
+						\node at (24.15, -6.0) {\footnotesize 0.1};
+						\draw[-{Triangle[width=16pt,length=16pt]}, line width=4pt] (27, -6.0) -- (25, -6.0);
+						\node at (30, -5.5) {\scriptsize 一様分布から};
+						\node at (30, -6.5) {\scriptsize サンプル};
+						\foreach \x / \y in {0/ I, 1/ went, 2/ \textcolor{red}{for}, 3/Tokyo, 4/.}{
+							\node at (\x * 4 + 16, -8.0) {\small \y};}
+						\draw[-{Triangle[width=48pt,length=16pt]}, line width=16pt] (16, -9.5) -- (16, -10.5);
+
+						\node[
+								rectangle,
+								text width=950,
+								text height=160,
+								rounded corners,
+								draw=blue,
+								fill=blue!20,
+								outer sep=3mm
+							] (s) at (16, -14.0) {};
+						\node[anchor=west] at (-1.5, -11.3) {\small ルール2};
+						\node[anchor=west] at (-1.0, -12.6) {\footnotesize 「1人称単数主格代名詞」};
+						\node[
+								rectangle,
+								text width=260,
+								text height=80,
+								rounded corners,
+								draw=green,
+								fill=green!20,
+								outer sep=3mm
+							] (s) at (4.5, -15.3) {};
+						\node at (2, -13.8) {\scriptsize ベータ分布};
+						\node at (2.2, -15.2) {\scriptsize $\mu$ = 0.03};
+						\node at (2.2, -16.2) {\scriptsize $\sigma$ = 0.03};
+						\node at (5.2, -15.7) {\scriptsize $\rightsquigarrow$};
+						\node at (7.5, -14.5) {\scriptsize 閾値};
+						\node at (7.5, -15.7) {\scriptsize 0.05};
+						\node[
+								rectangle,
+								text width=12,
+								text height=8,
+								rounded corners,
+								draw=green,
+								fill=green!20,
+								outer sep=0mm
+							] (s) at (16.15, -12.0) {};
+						\foreach \x / \y in {0/ I, 1/ went, 2/ for, 3/Tokyo, 4/.}{
+							\node at (\x * 4 + 16, -12.0) {\small \y};}
+						\node at (17, -11.2) {\tiny \textcolor{red}{OK}};
+						\draw[-{Triangle[width=16pt,length=16pt]}, line width=4pt] (16.15, -12.5) -- (16.15, -13.5);
+						\draw[-{Triangle[width=8pt,length=16pt]}, line width=1pt] (8.5, -15.7) -- (12.15, -15.0);
+						\node at (13.15, -15.0) {\footnotesize 0.05};
+						\node[rotate=20] at (14.65, -14.5) {\footnotesize $\not >$};
+						\node at (16.15, -14.0) {\footnotesize 0.9};
+						\foreach \x / \y in {0/ I, 1/ went, 2/ for, 3/Tokyo, 4/.}{
+							\node at (\x * 4 + 16, -16.0) {\small \y};}
+						\draw[-{Triangle[width=48pt,length=16pt]}, line width=16pt] (16, -17.5) -- (16, -18.5);
+
+						\node[
+								rectangle,
+								text width=950,
+								text height=40,
+								rounded corners,
+								draw=red,
+								fill=red!20,
+								outer sep=3mm
+							] (s) at (16, -20) {};
+						\node[anchor=west] at (2, -20) {\small 人工誤り文};
+						\foreach \x / \y in {0/ I, 1/ went, 2/ for, 3/Tokyo, 4/.}{
+							\node at (\x * 4 + 16, -20) {\small \y};}
+						
+					\end{tikzpicture}
+				\end{figure}
+				\vspace*{-0.2em}
+				ルールを順次，独立に適用 \\
+				文ごとに誤り確率を変え多様な誤り文を生成 \\
+				誤り生成規則は全\textbf{5}カテゴリ・\textbf{188}種類 \textcolor{blue}{${}^a$} \\
+				\hspace*{2em} {\small （機能語・活用・語順・単語選択・表記体系）}
+			\end{block}
+
+			\vspace*{-0.5em}
+			\begin{figure}[H]
+				\centering
+				\begin{tikzpicture}[
+							font=\sffamily,
+							scale=1.0,
+							transform shape]
+						\node[
+								rectangle,
+								text width=180,
+								text height=50,
+								draw=black,
+								fill=blue!20,
+								outer sep=1mm
+							] at (0, 0) {};
+						\node at (0, 0) {\textbf{結果}};
+				\end{tikzpicture}
+			\end{figure}
+
+			\vspace*{-0.8em}
+			\begin{tcolorbox}[
+					enhanced,
+					fonttitle=\bfseries,
+				colframe=gray,
+				colback=gray!5!,
+				colbacktitle=gray!80,
+					attach boxed title to top left={yshift=-2mm, xshift=2mm},
+				]
+				モデル: Transformer big \\
+				単言語コーパス: 1億2400万文 {\scriptsize (WMT ニュースタスク)} \\
+				学習者コーパス: 62万文
+				\begin{table}[H]
+					\centering
+					\small
+					\tabcolsep 6pt
+					\label{tab:result}
+					\begin{tabular}{lcccc}
+						\hline
+						& \multicolumn{2}{c}{\footnotesize
+								\hspace{-0em}{$\def\arraystretch{0.5}\begin{array}{cc}\vspace{-0.5em}\\\multicolumn{2}{c}{\text{BEA-19}}\\\text{valid} & \text{test}\\\end{array}$}\hspace{-2em}}
+						& \hspace{-2em}{\footnotesize $\def\arraystretch{0.5}\begin{array}{c}\vspace{-0.5em}\\\text{CoNLL}\\\text{14}\\\end{array}$}\hspace{-2em}
+						& {\footnotesize JFLEG}
+						\\
+						& {\scriptsize (F${}_{0.5}$)}
+						& {\scriptsize (F${}_{0.5}$)}
+						& {\scriptsize (F${}_{0.5}$)}
+						& {\scriptsize (GLEU)}
+						\\
+						\hline
+						ベースライン
+						& 44.73 & - & 53.88 & 57.37 \\
+						\hline
+						事前学習
+						& 41.79 & - & 54.92 & 58.35\\
+						\ \ +再学習
+						& 52.83 & - & 63.25 & 62.23 \\
+						\ \ \ {\footnotesize +アンサンブル+リスコア}
+						& 54.68 & 72.51 & \underline{65.43} \makebox[0pt]{\textcolor{blue}{${}^b$}}\ignorespaces & \underline{63.69} \\
+						{$\def\arraystretch{0.5}\hspace*{-2.5em}\begin{array}{c}\vspace*{-2em}\\\text{\tiny +再学習 +ドメイン適応}\\\text{\tiny \hspace*{10em} +アンサンブル+リスコア}\\\vspace*{-2em}\\\end{array}$}
+						& 56.49 & \underline{72.76} & - & - \\
+						\hline
+						{\footnotesize Grundkiewicz+ 19} {\tiny (ルールベース誤り生成)}
+						& 53.00 & 69.47 & 64.16 & 61.22 \\
+						{\footnotesize Omelianchuk+ 20} {\tiny (タグ付けモデル)}
+						& - & \textbf{73.7} & 66.5 & - \\
+						{\footnotesize Lichtarge+ 20} {\tiny (折返し翻訳の誤り生成)}
+						& - & 73.0 & \textbf{66.8} & \textbf{64.9} \\
+						\hline
+					\end{tabular}
+				\end{table}
+				既存のルールベース誤り生成よりは良い\\
+				タグ付モデル・MTベース誤り生成に及ばず
+			\end{tcolorbox}
+		\end{column}
+
+		\begin{column}{.33\linewidth}
+
+			\vspace*{-0.3em}
+			\begin{figure}[H]
+				\centering
+				\begin{tikzpicture}[
+							font=\sffamily,
+							scale=1.0,
+							transform shape]
+						\node[
+								rectangle,
+								text width=180,
+								text height=50,
+								fill=blue!20,
+								draw=black,
+								outer sep=1mm
+							] at (0, 0) {};
+						\node at (0, 0) {\textbf{議論}};
+				\end{tikzpicture}
+			\end{figure}
+
+			\vspace*{-0.8em}
+			\begin{block}{誤り生成規則の多様さは重要か？}
+				\begin{figure}[H]
+					\centering
+					{\footnotesize 事前学習 (8M文 $\times$ 10エポック) + 再学習} \\
+					\footnotesize
+					\begin{tikzpicture}[scale=1.0,transform shape]
+						\begin{axis}[
+								ymin=0,
+								ymax=1,
+								xmin=40,
+								xmax=50,
+								width=27cm,
+								height=20cm,
+								xbar=0pt,
+								/pgf/bar shift=0pt,
+								xlabel near ticks, xlabel shift={-8pt},
+								ylabel near ticks, ylabel shift={-2pt},
+								bar width=1.0cm,
+								xlabel={BEA-19 valid (F${}_{0.5}$)},
+								ytickmin=全カテゴリ,
+								ytickmax=ベースライン,
+								xtick={40,41,42,43,44,45,46,47,48,49,50},
+								symbolic y coords={0,全カテゴリ,全\ －\ 表記体系,全\ －\ 単語選択,全\ －\ 語順,全\ －\ 活用,全\ －\ 機能語,＋\ 表記体系,＋\ 単語選択,＋\ 語順,＋\ 活用,＋\ 機能語,ベースライン,1},
+								nodes near coords,
+								every node near coord/.append style={rotate=0, anchor=west, xshift=0.0cm, font=\scriptsize},
+								yticklabel style={anchor=west,xshift=-245pt},
+							]
+							\addplot[xbar, draw=red, fill=red!50] coordinates {
+								(44.73,ベースライン)};
+							\addplot[xbar, draw=magenta, fill=magenta!50, bar width=1.0cm] coordinates {
+									(45.12,＋\ 機能語)
+									(44.96,＋\ 活用)
+									(44.42,＋\ 語順)
+									(44.86,＋\ 単語選択)
+									(46.55,＋\ 表記体系)};
+							\addplot[xbar, draw=cyan, fill=cyan!50, bar width=1.0cm] coordinates {
+									(48.72,全\ －\ 機能語)
+									(48.45,全\ －\ 活用)
+									(48.60,全\ －\ 語順)
+									(48.56,全\ －\ 単語選択)
+									(47.51,全\ －\ 表記体系)};
+							\addplot[xbar, draw=blue, fill=blue!50, bar width=1.0cm] coordinates {
+									(48.59,全カテゴリ)};
+							\addplot[red, line legend, sharp plot, line width=2pt, nodes near coords={}]
+								coordinates {(44.73,0) (44.73,1)};
+							\addplot[blue, line legend, sharp plot, line width=2pt, nodes near coords={}]
+								coordinates {(48.59,0) (48.59,1)};
+							\node[rotate=-90] at (axis cs: 44.5,＋\ 表記体系) {\scriptsize ベ};
+							\node[rotate=-90] at (axis cs: 44.5,全\ －\ 機能語) {\scriptsize ー};
+							\node[rotate=-90] at (axis cs: 44.5,全\ －\ 活用) {\scriptsize ス};
+							\node[rotate=-90] at (axis cs: 44.5,全\ －\ 語順) {\scriptsize ラ};
+							\node[rotate=-90] at (axis cs: 44.5,全\ －\ 単語選択) {\scriptsize イ};
+							\node[rotate=-90] at (axis cs: 44.5,全\ －\ 表記体系) {\scriptsize ン};
+							\node[rotate=-90] at (axis cs: 48.3,＋\ 活用) {\scriptsize 全カテゴリ};
+						\end{axis}
+					\end{tikzpicture}
+				\end{figure}
+				\vspace*{-0.5em}
+				1カテゴリのみの誤り生成は効果が薄い \\
+				1カテゴリを除いても，性能低下しにくい
+				\begin{itemize}
+					\item 多様な誤り生成の統合は効果的
+				\end{itemize}
+			\end{block}
+
+			\begin{block}{単言語コーパスの規模は重要か？}
+				\begin{figure}[H]
+						\centering
+						\small
+						\vspace*{-0.1em}
+						\begin{tikzpicture}[scale=1.0,transform shape]
+							\begin{axis}[
+									ytick scale label code/.code={},
+									xmin=0,
+									ymin=46,
+									ymax=52,
+									xtick=data,
+									xticklabels={4M,8M,16M,32M},
+									width=28cm,
+									height=14cm,
+									grid=major,
+									ytick={46,48,50,52},
+									ylabel={\footnotesize \hspace*{-2em} BEA-19 valid {\scriptsize ($\text{F}_{0.5}$)}\hspace*{0em}},
+									xlabel near ticks, xlabel shift={-2pt},
+									ylabel near ticks, ylabel shift={-2pt},
+									legend style={
+										legend image post style={solid},
+										legend pos=south east,
+								}]
+							\addplot+[line width=3pt, mark size=6pt] coordinates {(4, 46.37) (8, 48.59) (16, 50.74) (32, 51.76)};
+							\addplot+[line width=3pt, mark size=6pt] coordinates {(4, 50.48) (8, 50.74) (16, 50.74) (32, 50.81)};
+							\legend{エポック数を固定した場合,ステップ数を固定した場合} 
+							\node at (axis cs: 3.0, 46.87) {\footnotesize 10};
+							\node at (axis cs: 7.0, 49.09) {\footnotesize 10};
+							\node at (axis cs: 15.0, 51.24) {\footnotesize 10};
+							\node at (axis cs: 33.3, 51.56) {\footnotesize 10};
+							\node at (axis cs: 3.0, 50.98) {\footnotesize 40};
+							\node at (axis cs: 7.0, 51.24) {\footnotesize 20};
+							\node at (axis cs: 33.0, 50.51) {\footnotesize 5};
+						\end{axis}
+						\end{tikzpicture}
+					\vskip0.0em
+					{\small 単言語コーパスの規模}
+				\end{figure}
+				\vspace*{0.2em}
+				単言語コーパスを4M,8M,16M,32Mと変え \\
+				エポック数固定(\textcolor{blue}{10})と\textcolor{red}{40→20→10→5}で比較
+				\vspace*{0.3em}
+				\begin{itemize}
+					\item 単言語コーパスの規模が大きければいいというわけではない
+					\item 低資源の言語にも良いルールを用いれば高性能なモデルを構築可能？
+				\end{itemize}
+			\end{block}
+
+		\end{column}
+	\end{columns}
+	\vskip0.3em
+	\textcolor{blue}{${}^a$} 誤り生成規則は実験に用いたソースコードとともに公開しています．(\href{https://github.com/nymwa/arteraro}{github.com/nymwa/arteraro}) \\
+	\textcolor{blue}{${}^b$} CoNLL-14に関する論文中の値に誤りがありましたので，当ポスター，修正原稿 (\href{https://github.com/nymwa/anlp\_nlp2021\_aeg/blob/main/nlp2021.pdf}{リンク})では訂正した値を掲載しました．
+\end{frame}
+\end{document}
+
